@@ -9,6 +9,7 @@ import json
 import os
 import requests as req
 import sys
+import yaml
 
 api = os.getenv('PRISMA_API_URL')
 username = os.getenv('PRISMA_ACCESS_KEY_ID')
@@ -92,10 +93,49 @@ Import all custom rules from runConfiguration.json
 """
 def import_custom_policies():
     print('Importing all custom policies for runConfiguration.json')
+    headers = get_headers(auth_prisma())
     run_config = []
     with open('data/runConfiguration.json', 'r') as rcfile:
         run_config = json.loads(rcfile.read())
-    print(run_config['customPolicies'])
+
+    url = f"{api}/code/api/v1/policies"
+    custom_policies = run_config['customPolicies']
+    for cp in custom_policies:
+        code = json.loads(cp['code'])
+        payload = {            
+            'cloudType': cp['provider'],
+            'complianceMetadata': [],
+            'description': 'Code Security build policy',
+            'labels': [],
+            'name': cp['title'],
+            'policySubTypes': ['build'],
+            'policyType': 'config',
+            'recommendation': cp['guideline'],
+            'rule': {
+                'children': [
+                    {
+                        'metadata': {
+                            'code': 'yaml string'
+                        },
+                        'type': 'build',
+                        'recommendation': cp['guideline']
+                    }
+                ],
+                'name': cp['title'],
+                'parameters': {
+                    'savedSearch': 'false',
+                    'withIac': 'true'
+                },
+                'type': 'Config'
+            },
+            'severity': cp['severity'],
+            'enabled': True
+        }
+        print(payload)
+        result = req.post(url, headers=headers, data=payload)
+        result_ok(result, f"Unable to import custom policy ID {cp['id']}")
+
+
 
 
 """
@@ -110,6 +150,6 @@ if __name__ == '__main__':
     print('Import Bridgecrew data into Prisma Cloud Code Security module 0.0.1')
     #import_github_repos()
     #get_all_repos()
-    #import_custom_policies()
+    import_custom_policies()
     #import_enforcement_rules()
     print('Done')
