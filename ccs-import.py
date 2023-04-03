@@ -2,8 +2,8 @@
 Import data into CCS
 1. Import repositories
 2. Import custom policies
-3. Import enforcement rules
-4. Import suppressions
+3. Import suppressions
+4. Import enforcement rules
 """
 import json
 import os
@@ -140,6 +140,38 @@ def import_custom_policies():
         
     print('===')
 
+"""
+Import policy suppressions. Custom policies need to be imported first.
+"""
+def import_policy_suppressions():
+    print('Importing policy type suppressions')
+    headers = get_headers(auth_prisma())
+    # Get all existing suppressions
+    url = f"{api}/code/api/v1/suppressions"
+    result = req.get(url, headers=headers)
+    result_ok(result, 'Failed to get a list of suppressions.')
+    current_suppressions = result.json()
+    # Read from exported data
+    with open('data/suppressions.json','r') as suppfile:
+        bc_supp = json.loads(suppfile.read())
+    # Filter by type of policy
+    pol_supp = [ps for ps in bc_supp if ps['suppressionType'] == 'Policy']
+    # Make sure the suppression to be created do not already exist
+    for ps in pol_supp:
+        policyId = ps['policyId']
+        if not any(cs['policyId'] == policyId for cs in current_suppressions):
+            # TODO: handle custom policy suppressions - policyId ~= customer-cloud-id
+            # Create suppression
+            url = f"{api}/code/api/v1/suppressions/{policyId}"
+            payload = json.dumps({
+                'comment': ps['comment'],
+                'origin': 'Platform',
+                'suppressionType': 'Policy'
+            })
+            result = req.post(url, headers=headers, data=payload)
+            result_ok(result, f"Failed to create suppression for policy {policyId}")
+            print(policyId, end=" ")
+            time.sleep(3)
 
 
 """
@@ -154,6 +186,7 @@ if __name__ == '__main__':
     print('Import Bridgecrew data into Prisma Cloud Code Security module 0.0.1')
     #import_github_repos()
     #get_all_repos()
-    import_custom_policies()
+    #import_custom_policies()
+    import_policy_suppressions()
     #import_enforcement_rules()
     print('Done')
