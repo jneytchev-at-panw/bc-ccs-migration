@@ -9,7 +9,7 @@ import json
 import os
 import requests as req
 import sys
-import yaml
+import time
 
 api = os.getenv('PRISMA_API_URL')
 username = os.getenv('PRISMA_ACCESS_KEY_ID')
@@ -94,47 +94,51 @@ Import all custom rules from runConfiguration.json
 def import_custom_policies():
     print('Importing all custom policies for runConfiguration.json')
     headers = get_headers(auth_prisma())
-    run_config = []
-    with open('data/runConfiguration.json', 'r') as rcfile:
-        run_config = json.loads(rcfile.read())
+    custom_policies = []
+    with open('data/customPolicies.json', 'r') as rcfile:
+        custom_policies = json.loads(rcfile.read())
 
-    url = f"{api}/code/api/v1/policies"
-    custom_policies = run_config['customPolicies']
-    for cp in custom_policies:
-        code = json.loads(cp['code'])
-        payload = {            
-            'cloudType': cp['provider'],
-            'complianceMetadata': [],
-            'description': 'Code Security build policy',
-            'labels': [],
-            'name': cp['title'],
-            'policySubTypes': ['build'],
-            'policyType': 'config',
-            'recommendation': cp['guideline'],
-            'rule': {
-                'children': [
-                    {
-                        'metadata': {
-                            'code': 'yaml string'
-                        },
-                        'type': 'build',
-                        'recommendation': cp['guideline']
-                    }
-                ],
-                'name': cp['title'],
-                'parameters': {
-                    'savedSearch': 'false',
-                    'withIac': 'true'
+    url = f"{api}/policy"
+
+    for cp in custom_policies['data']:
+        if(cp['code']):
+            payload = json.dumps({            
+                "cloudType": cp['provider'],
+                "complianceMetadata": [],
+                "description": cp['guideline'],
+                "labels": [],
+                "name": cp['title'],
+                "policySubTypes": ['build'],
+                "policyType": "config",
+                "recommendation": "",
+                "rule": {
+                    "children": [
+                        {
+                            "metadata": {
+                                "code": cp['code']
+                            },
+                            "type": "build",
+                            "recommendation": ""
+                        }
+                    ],
+                    "name": cp['title'],
+                    "parameters": {
+                        "savedSearch": "false",
+                        "withIac": "true"
+                    },
+                    "type": "Config"
                 },
-                'type': 'Config'
-            },
-            'severity': cp['severity'],
-            'enabled': True
-        }
-        print(payload)
-        result = req.post(url, headers=headers, data=payload)
-        result_ok(result, f"Unable to import custom policy ID {cp['id']}")
-
+                "severity": cp['severity'],
+                "findingTypes": []
+            })            
+            result = req.post(url, headers=headers, data=payload)
+            result_ok(result, f"Unable to import custom policy ID {cp['id']},\n payload: {payload}")
+            print(cp['id'])
+        else:            
+            print(f"**{cp['id']}**")
+        time.sleep(10)
+        
+    print('===')
 
 
 
