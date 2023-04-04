@@ -10,6 +10,7 @@ import os
 import requests as req
 import sys
 import time
+from datetime import timedelta
 
 api = os.getenv('PRISMA_API_URL')
 username = os.getenv('PRISMA_ACCESS_KEY_ID')
@@ -150,29 +151,33 @@ def import_policy_suppressions():
     url = f"{api}/code/api/v1/suppressions"
     result = req.get(url, headers=headers)
     result_ok(result, 'Failed to get a list of suppressions.')
-    current_suppressions = result.json()
+    ccs_supp = result.json()
     # Read from exported data
     with open('data/suppressions.json','r') as suppfile:
         bc_supp = json.loads(suppfile.read())
     # Filter by type of policy
-    pol_supp = [ps for ps in bc_supp if ps['suppressionType'] == 'Policy']
-    # Make sure the suppression to be created do not already exist
-    for ps in pol_supp:
-        policyId = ps['policyId']
-        if not any(cs['policyId'] == policyId for cs in current_suppressions):
-            # TODO: handle custom policy suppressions - policyId ~= customer-cloud-id
-            # Create suppression
-            url = f"{api}/code/api/v1/suppressions/{policyId}"
-            payload = json.dumps({
-                'comment': ps['comment'],
-                'origin': 'Platform',
-                'suppressionType': 'Policy'
-            })
-            result = req.post(url, headers=headers, data=payload)
-            result_ok(result, f"Failed to create suppression for policy {policyId}")
-            print(policyId, end=" ")
-            time.sleep(3)
+    for ps in bc_supp:
+        if ps['suppressionType'] == 'Policy':
+            # Currently custom suppressions are not handled
+            if ps['policyId'].startswith('BC_'):
+                existing_supp = [cs for cs in ccs_supp if cs['policyId'] == ps['policyId']]
+                if len(existing_supp) > 0:
+                    print(f"Deleting policy suppression for {existing_supp[0]['policyId']}")
+                    url = f"{api}/code/api/v1/suppressions/{existing_supp[0]['policyId']}/justifications/{existing_supp[0]['id']}"
+                    result = req.delete(url, headers=json.dumps({'authorization': headers['x-redlock-auth']}))
+                    result_ok(result, f"Failed to delete suppression {existing_supp[0]['id']}")
 
+                url = f"{api}/code/api/v1/suppressions/{ps['policyId']}"
+                payload = json.dumps({
+                    'comment': ps['comment'],
+                    'expirationTime': int(time.time() + timedelta(days=365).total_seconds()),
+                    'origin': 'Platform',
+                    'suppressionType': 'Policy'
+                })
+                result = req.post(url, headers=headers, data=payload)
+                result_ok(result, f"Failed to create policy suppression for {ps['policyId']}")
+            else:
+                print(f"Suppression for custom policy {ps['policyId']} not imported.")
 
 """
 Import enforcement rules
@@ -190,3 +195,5 @@ if __name__ == '__main__':
     import_policy_suppressions()
     #import_enforcement_rules()
     print('Done')
+
+
