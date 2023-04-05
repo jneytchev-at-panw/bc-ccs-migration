@@ -67,6 +67,17 @@ def export_suppressions():
     with open('data/suppressions.json', 'w') as supfile:
         supfile.write(json.dumps(result.json()))
 
+"""
+Export running configuration
+"""
+def export_run_configuration():
+    print('Exporting running configuration')
+    url = f"{api}/v1/checkov/runConfiguration?module=bc"
+    result = req.get(url, headers=headers)
+    result_ok(result, 'Could not get running configuration.')
+    with open('data/runConfiguration.json', 'w') as supfile:
+        supfile.write(json.dumps(result.json()))    
+
 if __name__ == '__main__':
     print('Export BC data 0.0.1')
     export_repos()
